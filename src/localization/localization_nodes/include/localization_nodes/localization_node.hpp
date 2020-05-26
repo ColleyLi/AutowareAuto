@@ -161,6 +161,11 @@ public:
     return m_pose_publisher;
   }
 
+  ~RelativeLocalizerNode(){
+      RCLCPP_WARN(this->get_logger(), "Average runtime: " + std::to_string(m_avg_duration) + "ms.");
+      RCLCPP_WARN(this->get_logger(), "Max runtime: " + std::to_string(m_max_duration) + "ms.");
+  }
+
 protected:
   /// Set the localizer.
   /// \param localizer_ptr rvalue to the localizer to set.
@@ -232,6 +237,7 @@ private:
   /// \param msg_ptr Pointer to the observation message.
   void observation_callback(typename ObservationMsgT::ConstSharedPtr msg_ptr)
   {
+    const auto start = std::chrono::steady_clock::now();
     check_localizer();
     if (m_localizer_ptr->map_valid()) {
       try {
@@ -270,6 +276,14 @@ private:
     } else {
       on_observation_with_invalid_map(msg_ptr);
     }
+        // Measure time.
+    const auto dur = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+    const auto prev_count = m_callback_counter;
+    ++m_callback_counter;
+     m_avg_duration = static_cast<double>(m_avg_duration * prev_count + dur) / m_callback_counter;
+    if(dur > m_max_duration){
+        m_max_duration = dur;
+    }
   }
 
   /// Callback that updates the map.
@@ -287,33 +301,47 @@ private:
   /// Publish the pose message as a transform.
   void publish_tf(const PoseWithCovarianceStamped & pose_msg)
   {
-    const auto & pose = pose_msg.pose.pose;
-    tf2::Quaternion rotation{pose.orientation.x, pose.orientation.y, pose.orientation.z,
-      pose.orientation.w};
-    tf2::Vector3 translation{pose.position.x, pose.position.y, pose.position.z};
-    const tf2::Transform map_base_link_transform{rotation, translation};
+//    const auto & pose = pose_msg.pose.pose;
+//    tf2::Quaternion rotation{pose.orientation.x, pose.orientation.y, pose.orientation.z,
+//      pose.orientation.w};
+//    tf2::Vector3 translation{pose.position.x, pose.position.y, pose.position.z};
+//    const tf2::Transform map_base_link_transform{rotation, translation};
+//    RCLCPP_WARN(get_logger(), "computing tf....:");
+//    const auto odom_tf = m_tf_buffer.lookupTransform("odom", "base_link",
+//        time_utils::from_message(pose_msg.header.stamp));
+//    tf2::Quaternion odom_rotation{odom_tf.transform.rotation.x,
+//      odom_tf.transform.rotation.y, odom_tf.transform.rotation.z, odom_tf.transform.rotation.w};
+//    tf2::Vector3 odom_translation{odom_tf.transform.translation.x, odom_tf.transform.translation.y,
+//      odom_tf.transform.translation.z};
+//    const tf2::Transform odom_base_link_transform{odom_rotation, odom_translation};
+//
+//    const auto map_odom_tf = map_base_link_transform * odom_base_link_transform.inverse();
+//
+//    tf2_msgs::msg::TFMessage tf_message;
+//    geometry_msgs::msg::TransformStamped tf_stamped;
+//    tf_stamped.header.stamp = pose_msg.header.stamp;
+//    tf_stamped.header.frame_id = m_localizer_ptr->map_frame_id();
+//    tf_stamped.child_frame_id = "odom";
+//    const auto & tf_trans = map_odom_tf.getOrigin();
+//    const auto & tf_rot = map_odom_tf.getRotation();
+//    tf_stamped.transform.translation.set__x(tf_trans.x()).set__y(tf_trans.y()).
+//    set__z(tf_trans.z());
+//    tf_stamped.transform.rotation.set__x(tf_rot.x()).set__y(tf_rot.y()).set__z(tf_rot.z()).
+//    set__w(tf_rot.w());
+//    tf_message.transforms.push_back(tf_stamped);
+//    m_tf_publisher->publish(tf_message);
 
-    const auto odom_tf = m_tf_buffer.lookupTransform("odom", "base_link",
-        time_utils::from_message(pose_msg.header.stamp));
-    tf2::Quaternion odom_rotation{odom_tf.transform.rotation.x,
-      odom_tf.transform.rotation.y, odom_tf.transform.rotation.z, odom_tf.transform.rotation.w};
-    tf2::Vector3 odom_translation{odom_tf.transform.translation.x, odom_tf.transform.translation.y,
-      odom_tf.transform.translation.z};
-    const tf2::Transform odom_base_link_transform{odom_rotation, odom_translation};
-
-    const auto map_odom_tf = map_base_link_transform * odom_base_link_transform.inverse();
 
     tf2_msgs::msg::TFMessage tf_message;
     geometry_msgs::msg::TransformStamped tf_stamped;
-    tf_stamped.header.stamp = pose_msg.header.stamp;
+    tf_stamped.header = pose_msg.header;
     tf_stamped.header.frame_id = m_localizer_ptr->map_frame_id();
-    tf_stamped.child_frame_id = "odom";
-    const auto & tf_trans = map_odom_tf.getOrigin();
-    const auto & tf_rot = map_odom_tf.getRotation();
-    tf_stamped.transform.translation.set__x(tf_trans.x()).set__y(tf_trans.y()).
-    set__z(tf_trans.z());
-    tf_stamped.transform.rotation.set__x(tf_rot.x()).set__y(tf_rot.y()).set__z(tf_rot.z()).
-    set__w(tf_rot.w());
+    tf_stamped.child_frame_id = "base_link";
+    const auto & pose_trans = pose_msg.pose.pose.position;
+    const auto & pose_rot = pose_msg.pose.pose.orientation;
+    tf_stamped.transform.translation.set__x(pose_trans.x).set__y(pose_trans.y).set__z(pose_trans.z);
+    tf_stamped.transform.rotation.set__x(pose_rot.x).set__y(pose_rot.y).set__z(pose_rot.z).set__w(
+      pose_rot.w);
     tf_message.transforms.push_back(tf_stamped);
     m_tf_publisher->publish(tf_message);
   }
@@ -349,6 +377,9 @@ private:
   bool m_use_hack{false};
   bool m_hack_initialized{false};
   geometry_msgs::msg::TransformStamped m_init_hack_transform;
+  double m_avg_duration{0.0};
+  uint64_t m_max_duration{0UL};
+  uint64_t m_callback_counter{0UL};
 };
 }  // namespace localization_nodes
 }  // namespace localization
