@@ -159,7 +159,11 @@ public:
         "ndt_pose",
         rclcpp::QoS{rclcpp::KeepLast{
             static_cast<size_t>(declare_parameter(
-              "pose_pub.history_depth").template get<size_t>())}}))
+              "pose_pub.history_depth").template get<size_t>())}})),
+    m_initial_pose_sub(create_subscription<PoseWithCovarianceStamped>(
+        "initialpose",
+        rclcpp::QoS{rclcpp::KeepLast{10}},
+        [this](const typename PoseWithCovarianceStamped::ConstSharedPtr msg) {initial_pose_callback(msg);}))
   {
     init();
   }
@@ -396,6 +400,9 @@ private:
     }
   }
 
+  void initial_pose_callback(const typename PoseWithCovarianceStamped::ConstSharedPtr msg)
+  {}
+
   LocalizerBasePtr m_localizer_ptr;
   PoseInitializerT m_pose_initializer;
   tf2::BufferCore m_tf_buffer;
@@ -404,6 +411,10 @@ private:
   typename rclcpp::Subscription<MapMsgT>::SharedPtr m_map_sub;
   typename rclcpp::Publisher<PoseWithCovarianceStamped>::SharedPtr m_pose_publisher;
   typename rclcpp::Publisher<tf2_msgs::msg::TFMessage>::SharedPtr m_tf_publisher{nullptr};
+
+  // Receive updates from "/initialpose" (e.g. rviz2)
+  typename rclcpp::Subscription<PoseWithCovarianceStamped>::SharedPtr m_initial_pose_sub;
+
   // TODO(yunus.caliskan): Remove hack variables below in #425
   bool m_use_hack{false};
   bool m_hack_initialized{false};
