@@ -29,6 +29,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <mutex>
 
 namespace autoware
 {
@@ -69,6 +70,7 @@ public:
   using LocalizerBasePtr = std::unique_ptr<LocalizerBase>;
   using Cloud = sensor_msgs::msg::PointCloud2;
   using PoseWithCovarianceStamped = typename LocalizerBase::PoseWithCovarianceStamped;
+  using PoseT = typename PoseInitializerT::PoseT;
   using TransformStamped = typename LocalizerBase::Transform;
   using RegistrationSummary = typename LocalizerT::RegistrationSummary;
 
@@ -282,17 +284,12 @@ private:
         const auto & observation_frame = get_frame_id(*msg_ptr);
         const auto & map_frame = m_localizer_ptr->map_frame_id();
 
-        ////////////////////////////////////////////////////////
-        // TODO(yunus.caliskan): remove in #425
-        if (m_use_hack && !m_hack_initialized) {
-          check_and_execute_hack(get_stamp(*msg_ptr));
+        PoseT initial_guess;
+        {
+          std::lock_guard<std::mutex> guard(m_tf_buffer_mutex);
+          initial_guess =
+            m_pose_initializer.guess(m_tf_buffer, observation_time, map_frame, observation_frame);
         }
-        /////////////////////////////////////////////////////////
-
-        const auto initial_guess =
-          m_pose_initializer.guess(m_tf_buffer, observation_time, map_frame, observation_frame);
-
-        m_hack_initialized = true;  // Only after a successful lookup, disable the hack.
 
         PoseWithCovarianceStamped pose_out;
         const auto summary =
@@ -403,7 +400,20 @@ private:
   }
 
   void initial_pose_callback(const typename PoseWithCovarianceStamped::ConstSharedPtr msg)
-  {}
+  {
+    std::lock_guard<std::mutex> guard(m_tf_buffer_mutex);
+    auto & tf = m_init_hack_transform.transform;
+    tf.rotation.x = msg->pose.orientation.x;
+    tf.rotation.y = msg->pose.orientation.y;
+    tf.rotation.z = msg->pose.orientation.z;
+    tf.rotation.w = msg->pose.orientation.w;
+    tf.translation.x = msg->pose.position.x;
+    tf.translation.y = msg->pose.position.y;
+    tf.translation.z = msg->pose.position.z;
+    m_init_hack_transform.header.frame_id = "map";
+    m_init_hack_transform.child_frame_id = "odom";
+    m_use_hack = true;  // On this constructor that is used by the executable,
+  }
 
   LocalizerBasePtr m_localizer_ptr;
   PoseInitializerT m_pose_initializer;
@@ -416,6 +426,7 @@ private:
 
   // Receive updates from "/initialpose" (e.g. rviz2)
   typename rclcpp::Subscription<PoseWithCovarianceStamped>::SharedPtr m_initial_pose_sub;
+  std::mutex m_tf_buffer_mutex;
 
   // TODO(yunus.caliskan): Remove hack variables below in #425
   bool m_use_hack{false};
