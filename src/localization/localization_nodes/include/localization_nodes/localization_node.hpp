@@ -163,7 +163,9 @@ public:
     m_initial_pose_sub(create_subscription<PoseWithCovarianceStamped>(
         "initialpose",
         rclcpp::QoS{rclcpp::KeepLast{10}},
-        [this](const typename PoseWithCovarianceStamped::ConstSharedPtr msg) {initial_pose_callback(msg);}))
+        [this](const typename PoseWithCovarianceStamped::ConstSharedPtr msg) {
+          initial_pose_callback(msg);
+        }))
   {
     init();
   }
