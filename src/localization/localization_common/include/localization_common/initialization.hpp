@@ -40,9 +40,9 @@ template<typename Derived>
 class LOCALIZATION_COMMON_PUBLIC PoseInitializerBase
   : public common::helper_functions::crtp<Derived>
 {
+public:
   using PoseT = geometry_msgs::msg::TransformStamped;
 
-public:
   /// Guess the pose at a given time point. This function will look the transform up in the
   /// transform graph between the specified frames. If extrapolation is required, the behavior is
   /// determined by the implementation class. tf2 lookup may generate exceptions if the lookup
@@ -76,9 +76,9 @@ public:
 class LOCALIZATION_COMMON_PUBLIC BestEffortInitializer
   : public PoseInitializerBase<BestEffortInitializer>
 {
+public:
   using PoseT = geometry_msgs::msg::TransformStamped;
 
-public:
   ///  Get the latest available transform.
   /// \param tf_graph Transform graph that contains all the transforms to look up.
   /// \param time_point Time to guess the pose.

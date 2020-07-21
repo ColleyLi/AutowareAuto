@@ -403,13 +403,13 @@ private:
   {
     std::lock_guard<std::mutex> guard(m_tf_buffer_mutex);
     auto & tf = m_init_hack_transform.transform;
-    tf.rotation.x = msg->pose.orientation.x;
-    tf.rotation.y = msg->pose.orientation.y;
-    tf.rotation.z = msg->pose.orientation.z;
-    tf.rotation.w = msg->pose.orientation.w;
-    tf.translation.x = msg->pose.position.x;
-    tf.translation.y = msg->pose.position.y;
-    tf.translation.z = msg->pose.position.z;
+    tf.rotation.x = msg->pose.pose.orientation.x;
+    tf.rotation.y = msg->pose.pose.orientation.y;
+    tf.rotation.z = msg->pose.pose.orientation.z;
+    tf.rotation.w = msg->pose.pose.orientation.w;
+    tf.translation.x = msg->pose.pose.position.x;
+    tf.translation.y = msg->pose.pose.position.y;
+    tf.translation.z = msg->pose.pose.position.z;
     m_init_hack_transform.header.frame_id = "map";
     m_init_hack_transform.child_frame_id = "odom";
     m_use_hack = true;  // On this constructor that is used by the executable,
