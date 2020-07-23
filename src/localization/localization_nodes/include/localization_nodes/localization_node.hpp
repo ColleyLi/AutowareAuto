@@ -284,12 +284,20 @@ private:
         const auto & observation_frame = get_frame_id(*msg_ptr);
         const auto & map_frame = m_localizer_ptr->map_frame_id();
 
+        ////////////////////////////////////////////////////////
+        // TODO(yunus.caliskan): remove in #425
+        if (m_use_hack && !m_hack_initialized) {
+          check_and_execute_hack(get_stamp(*msg_ptr));
+        }
+
         PoseT initial_guess;
         {
           std::lock_guard<std::mutex> guard(m_tf_buffer_mutex);
           initial_guess =
             m_pose_initializer.guess(m_tf_buffer, observation_time, map_frame, observation_frame);
         }
+
+        m_hack_initialized = true;  // Only after a successful lookup, disable the hack.
 
         PoseWithCovarianceStamped pose_out;
         const auto summary =
@@ -399,20 +407,42 @@ private:
     }
   }
 
-  void initial_pose_callback(const typename PoseWithCovarianceStamped::ConstSharedPtr msg)
+  void initial_pose_callback(const typename PoseWithCovarianceStamped::ConstSharedPtr msg_ptr)
   {
     std::lock_guard<std::mutex> guard(m_tf_buffer_mutex);
+
+    const auto observation_time = ::time_utils::from_message(get_stamp(*msg_ptr));
+    const auto & observation_frame = get_frame_id(*msg_ptr);
+    const auto & map_frame = m_localizer_ptr->map_frame_id();
+
     auto & tf = m_init_hack_transform.transform;
-    tf.rotation.x = msg->pose.pose.orientation.x;
-    tf.rotation.y = msg->pose.pose.orientation.y;
-    tf.rotation.z = msg->pose.pose.orientation.z;
-    tf.rotation.w = msg->pose.pose.orientation.w;
-    tf.translation.x = msg->pose.pose.position.x;
-    tf.translation.y = msg->pose.pose.position.y;
-    tf.translation.z = msg->pose.pose.position.z;
+    tf.rotation.x = msg_ptr->pose.pose.orientation.x;
+    tf.rotation.y = msg_ptr->pose.pose.orientation.y;
+    tf.rotation.z = msg_ptr->pose.pose.orientation.z;
+    tf.rotation.w = msg_ptr->pose.pose.orientation.w;
+    tf.translation.x = msg_ptr->pose.pose.position.x;
+    tf.translation.y = msg_ptr->pose.pose.position.y;
+    tf.translation.z = msg_ptr->pose.pose.position.z;
     m_init_hack_transform.header.frame_id = "map";
     m_init_hack_transform.child_frame_id = "odom";
-    m_use_hack = true;  // On this constructor that is used by the executable,
+
+    PoseT initial_guess =
+      m_pose_initializer.guess(m_tf_buffer, observation_time, map_frame, observation_frame);
+
+    PoseWithCovarianceStamped pose_out;
+    const auto summary =
+      m_localizer_ptr->register_measurement(*msg_ptr, initial_guess, pose_out);
+    if (validate_output(summary, pose_out, initial_guess)) {
+      m_pose_publisher->publish(pose_out);
+      // This is to be used when no state estimator or alternative source of
+      // localization is available.
+      if (m_tf_publisher) {
+        publish_tf(pose_out);
+      }
+      handle_registration_summary(summary);
+    } else {
+      on_invalid_output(pose_out);
+    }
   }
 
   LocalizerBasePtr m_localizer_ptr;
