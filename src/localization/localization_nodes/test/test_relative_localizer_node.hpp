@@ -69,8 +69,6 @@ private:
 class MockInitializer
 {
 public:
-  using PoseT = geometry_msgs::msg::TransformStamped;
-
   Transform guess(
     const tf2::BufferCore &, tf2::TimePoint stamp,
     const std::string & id1, const std::string & id2);
