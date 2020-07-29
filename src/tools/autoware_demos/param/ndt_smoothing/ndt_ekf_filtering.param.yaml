@@ -5,6 +5,7 @@
       input_pose:
         - /localization/ndt_pose_with_covariance
     data_driven: true
+    publish_tf: true
     frame_id: "map"
     mahalanobis_threshold: 1.0
 
