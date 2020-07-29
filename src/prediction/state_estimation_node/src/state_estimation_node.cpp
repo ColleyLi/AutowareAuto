@@ -141,6 +141,13 @@ Eigen::Matrix<float32_t, kStateDim, kStateDim> create_state_variances(
   return diagonal.asDiagonal();
 }
 
+autoware::common::types::float64_t get_speed(const geometry_msgs::msg::Twist & twist)
+{
+  const auto x = twist.linear.x;
+  const auto y = twist.linear.y;
+  return std::sqrt(x * x + y * y);
+}
+
 
 }  // namespace
 
@@ -212,6 +219,9 @@ StateEstimationNode::StateEstimationNode(
   if (publish_ft) {
     m_tf_publisher = create_publisher<tf2_msgs::msg::TFMessage>("/tf", kDefaultHistory);
   }
+
+  m_min_speed_to_use_speed_orientation = declare_parameter(
+    "min_speed_to_use_speed_orientation", 0.0);
 }
 
 void StateEstimationNode::odom_callback(const OdomMsgT::SharedPtr msg)
@@ -220,6 +230,7 @@ void StateEstimationNode::odom_callback(const OdomMsgT::SharedPtr msg)
   m_ekf->observation_update(
     time_observation_received, message_to_measurement<MeasurementPoseAndSpeed>(
       *msg, get_transform(msg->header)));
+  m_latest_orientation = msg->pose.pose.orientation;
   if (m_publish_data_driven) {
     publish_current_state();
   }
@@ -231,6 +242,7 @@ void StateEstimationNode::pose_callback(const PoseMsgT::SharedPtr msg)
   m_ekf->observation_update(
     time_observation_received, message_to_measurement<MeasurementPose>(
       *msg, get_transform(msg->header)));
+  m_latest_orientation = msg->pose.pose.orientation;
   if (m_publish_data_driven) {
     publish_current_state();
   }
@@ -274,7 +286,10 @@ void StateEstimationNode::predict_and_publish_current_state()
 void StateEstimationNode::publish_current_state()
 {
   if (m_ekf->is_initialized() && m_publisher) {
-    const auto & state = m_ekf->get_state();
+    auto state = m_ekf->get_state();
+    if (get_speed(state.twist.twist) < m_min_speed_to_use_speed_orientation) {
+      state.pose.pose.orientation = m_latest_orientation;
+    }
     m_publisher->publish(state);
     if (m_tf_publisher) {
       TfMsgT tf_msg{};

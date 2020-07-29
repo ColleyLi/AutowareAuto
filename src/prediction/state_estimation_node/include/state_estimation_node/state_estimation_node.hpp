@@ -137,7 +137,7 @@ private:
 
   common::types::bool8_t m_filter_initialized{};
   common::types::bool8_t m_publish_data_driven{};
-  autoware::common::types::float64_t m_publish_frequency{};
+  common::types::float64_t m_publish_frequency{};
 
   std::string m_frame_id{};
   std::string m_child_frame_id{};
@@ -148,6 +148,9 @@ private:
 
   tf2::BufferCore m_tf_buffer;
   tf2_ros::TransformListener m_tf_listener;
+
+  geometry_msgs::msg::Quaternion m_latest_orientation{};
+  common::types::float64_t m_min_speed_to_use_speed_orientation{};
 };
 
 }  // namespace state_estimation_node
