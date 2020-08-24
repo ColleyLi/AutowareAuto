@@ -404,17 +404,6 @@ private:
 
   void initial_pose_callback(const typename PoseWithCovarianceStamped::ConstSharedPtr msg_ptr)
   {
-    auto & tf = m_init_hack_transform.transform;
-    tf.rotation.x = msg_ptr->pose.pose.orientation.x;
-    tf.rotation.y = msg_ptr->pose.pose.orientation.y;
-    tf.rotation.z = msg_ptr->pose.pose.orientation.z;
-    tf.rotation.w = msg_ptr->pose.pose.orientation.w;
-    tf.translation.x = msg_ptr->pose.pose.position.x;
-    tf.translation.y = msg_ptr->pose.pose.position.y;
-    tf.translation.z = msg_ptr->pose.pose.position.z;
-    m_init_hack_transform.header.frame_id = "map";
-    m_init_hack_transform.child_frame_id = "odom";
-
     if (m_tf_publisher) {
       publish_tf(*msg_ptr);
     }
